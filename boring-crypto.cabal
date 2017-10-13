@@ -1,0 +1,73 @@
+name:                boring-crypto
+version:             0.1.0.0
+synopsis:            The dull crypto library
+-- description:         
+license:             MIT
+license-file:        LICENSE
+author:              Patrick Chilton
+maintainer:          chpatrick@gmail.com
+-- copyright:           
+category:            Cryptography
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  exposed-modules:     Crypto.Boring.Digest     
+                       Crypto.Boring.Exception
+                       Crypto.Boring.Symmetric
+                       Crypto.Boring.Random
+  other-modules:       Crypto.Boring.Internal.Context
+                       Crypto.Boring.Internal.Prelude
+                       Crypto.Boring.Internal.Util
+  -- other-extensions:    
+  build-depends:       base >=4.9 && <4.11,
+                       conduit,
+                       inline-c >= 0.6.0.5,
+                       bytestring,
+                       mtl,
+                       mmorph,
+                       containers,
+                       resourcet,
+                       tagged,
+                       safe-exceptions
+  hs-source-dirs:      src
+  default-language:    Haskell2010
+  pkgconfig-depends:   openssl
+  ghc-options:         -Wall
+  cc-options:          -Wall -Wextra -Wconversion
+  default-extensions:  TemplateHaskell
+                       FlexibleContexts
+                       OverloadedStrings
+                       QuasiQuotes
+                       ScopedTypeVariables
+                       TypeApplications
+                       KindSignatures
+                       DataKinds
+                       LambdaCase
+                       RankNTypes
+
+test-suite boring-crypto-tests
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      test
+  main-is:             tests.hs
+  ghc-options:         -Wall
+  other-modules:       Crypto.Boring.Test.Symmetric
+                       Crypto.Boring.Test.Random
+  default-language:    Haskell2010
+  build-depends:       base,
+                       boring-crypto,
+                       tasty,
+                       QuickCheck,
+                       tasty-quickcheck,
+                       bytestring,
+                       tagged,
+                       conduit
+  default-extensions:  TemplateHaskell
+                       FlexibleContexts
+                       OverloadedStrings
+                       QuasiQuotes
+                       ScopedTypeVariables
+                       TypeApplications
+                       KindSignatures
+                       DataKinds
+                       LambdaCase
