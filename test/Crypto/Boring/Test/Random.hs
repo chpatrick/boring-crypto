@@ -14,10 +14,10 @@ import Crypto.Boring.Random
 randomReturnsCorrectLength :: Property
 randomReturnsCorrectLength = monadicIO $ do
   size <- pick (sized return)
-  buf <- liftIO $ genRandom size
+  buf <- liftIO $ randomBytes size
   return (BS.length buf === size)
 
 randomTests :: TestTree
 randomTests = testGroup "Random"
-  [ testProperty "genRandom returns correct length" randomReturnsCorrectLength
+  [ testProperty "randomBytes returns correct length" randomReturnsCorrectLength
   ]
