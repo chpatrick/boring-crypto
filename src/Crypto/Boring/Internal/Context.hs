@@ -5,6 +5,7 @@ module Crypto.Boring.Internal.Context
   , EVP_CIPHER
   , EVP_MD_CTX
   , EVP_MD
+  , HMAC_CTX
   , cryptoCtx
   ) where
 
@@ -20,6 +21,8 @@ data EVP_MD
 data EVP_CIPHER_CTX
 data EVP_CIPHER
 
+data HMAC_CTX
+
 cryptoCtx :: C.Context
 cryptoCtx = C.baseCtx <> C.bsCtx <> C.fptrCtx <> mempty
   { C.ctxTypesTable = M.fromList
@@ -28,5 +31,7 @@ cryptoCtx = C.baseCtx <> C.bsCtx <> C.fptrCtx <> mempty
 
       , ( C.TypeName "EVP_CIPHER_CTX", [t|EVP_CIPHER_CTX|] )
       , ( C.TypeName "EVP_CIPHER", [t|EVP_CIPHER|] )
+
+      , ( C.TypeName "HMAC_CTX", [t|HMAC_CTX|] )
       ]
   }

@@ -17,7 +17,6 @@ let
 
       buildInputs = [ cmake perl go ];
       enableParallelBuilding = true;
-      NIX_CFLAGS_COMPILE = "-Wno-error";
 
       cmakeFlags = [ "-DBUILD_SHARED_LIBS=true" ];
 

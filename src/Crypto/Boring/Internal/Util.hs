@@ -3,7 +3,7 @@ module Crypto.Boring.Internal.Util
   , unsafeGeneralizeIO
   ) where
 
-import Control.Monad.Morph
+import Data.Conduit
 import Foreign.C
 import Control.Exception.Safe
 
@@ -11,8 +11,8 @@ import Crypto.Boring.Exception
 
 import System.IO.Unsafe
 
-unsafeGeneralizeIO :: (MFunctor t, Monad m) => t IO a -> t m a
-unsafeGeneralizeIO = hoist (return . unsafePerformIO)
+unsafeGeneralizeIO :: Monad m => ConduitM i o IO r -> ConduitM i o m r
+unsafeGeneralizeIO = transPipe (return . unsafePerformIO)
 
 checkRes :: MonadThrow m => String -> m CInt -> m ()
 checkRes name m = do
