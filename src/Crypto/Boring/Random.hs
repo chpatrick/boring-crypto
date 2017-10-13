@@ -1,7 +1,7 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Crypto.Boring.Random
-  ( genRandom
+  ( randomBytes
   ) where
 
 import qualified Data.ByteString as BS
@@ -12,34 +12,14 @@ import Foreign
 import Crypto.Boring.Internal.Prelude
 import Crypto.Boring.Exception
 
-C.include "<sys/random.h>"
-C.include "<stdint.h>"
+C.include "<openssl/rand.h>"
 
--- TODO: support other platforms
-
-genRandom :: Int -> IO BS.ByteString
-genRandom len = do
+randomBytes :: MonadIO m => Int -> m BS.ByteString
+randomBytes len = liftIO $ do
   let c'len = fromIntegral len
   BS.create len $ \bufPtr -> do
-    success <- [C.block| int {
-      const size_t target = $(size_t c'len);
-      uint8_t* buf = $(uint8_t* bufPtr);
-      size_t totalRead = 0;
-
-      while (totalRead < target) {
-        // getrandom can be interrupted and return less than len bytes,
-        // so loop until we've filled the buffer
-        const ssize_t res = getrandom(buf + totalRead, target - totalRead, 0);
-
-        if (res < 0) {
-          return 0;
-        }
-
-        totalRead += res;
-      }
-
-      return 1;
-
+    success <- [C.exp| int {
+      RAND_bytes($(uint8_t* bufPtr), $(size_t c'len))
       } |]
 
     unless (toBool success) $

@@ -45,13 +45,11 @@ newtype Key (cipher :: Cipher) = Key BS.ByteString
 data BlockCipherMode
   = CBC
   | ECB
-  | CFB
   | OFB
     deriving (Eq, Ord, Show, Enum, Bounded)
 
 data Cipher
   = AES128
-  | AES192
   | AES256
     deriving (Eq, Ord, Show, Enum, Bounded)
 
@@ -61,16 +59,12 @@ class IsCipher (cipher :: Cipher) where
 instance IsCipher 'AES128 where
   reflectCipher = Tagged AES128
 
-instance IsCipher 'AES192 where
-  reflectCipher = Tagged AES192
-
 instance IsCipher 'AES256 where
   reflectCipher = Tagged AES256
 
 reifyCipher :: Cipher -> (forall cipher. IsCipher cipher => Proxy cipher -> a) -> a
 reifyCipher c f = case c of
   AES128 -> f (Proxy @'AES128)
-  AES192 -> f (Proxy @'AES192)
   AES256 -> f (Proxy @'AES256)
 
 cipherBlockSize :: Cipher -> Int
@@ -107,19 +101,11 @@ getCipher cipher mode = case cipher of
   AES128 -> case mode of
     CBC -> [C.exp| const EVP_CIPHER* { EVP_aes_128_cbc() } |]
     ECB -> [C.exp| const EVP_CIPHER* { EVP_aes_128_ecb() } |]
-    CFB -> [C.exp| const EVP_CIPHER* { EVP_aes_128_cfb() } |]
     OFB -> [C.exp| const EVP_CIPHER* { EVP_aes_128_ofb() } |]
-
-  AES192 -> case mode of
-    CBC -> [C.exp| const EVP_CIPHER* { EVP_aes_192_cbc() } |]
-    ECB -> [C.exp| const EVP_CIPHER* { EVP_aes_192_ecb() } |]
-    CFB -> [C.exp| const EVP_CIPHER* { EVP_aes_192_cfb() } |]
-    OFB -> [C.exp| const EVP_CIPHER* { EVP_aes_192_ofb() } |]
 
   AES256 -> case mode of
     CBC -> [C.exp| const EVP_CIPHER* { EVP_aes_256_cbc() } |]
     ECB -> [C.exp| const EVP_CIPHER* { EVP_aes_256_ecb() } |]
-    CFB -> [C.exp| const EVP_CIPHER* { EVP_aes_256_cfb() } |]
     OFB -> [C.exp| const EVP_CIPHER* { EVP_aes_256_ofb() } |]
 
 crypt
