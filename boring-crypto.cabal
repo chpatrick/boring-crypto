@@ -52,15 +52,20 @@ test-suite boring-crypto-tests
   ghc-options:         -Wall
   other-modules:       Crypto.Boring.Test.Symmetric
                        Crypto.Boring.Test.Random
+                       Crypto.Boring.Test.TestVectors
+                       Crypto.Boring.Test.Digest
   default-language:    Haskell2010
   build-depends:       base,
                        boring-crypto,
                        tasty,
                        QuickCheck,
                        tasty-quickcheck,
+                       tasty-hunit,
                        bytestring,
                        tagged,
-                       conduit
+                       conduit,
+                       megaparsec,
+                       path
   default-extensions:  TemplateHaskell
                        FlexibleContexts
                        OverloadedStrings
@@ -70,3 +75,5 @@ test-suite boring-crypto-tests
                        KindSignatures
                        DataKinds
                        LambdaCase
+                       TypeFamilies
+                       MultiWayIf

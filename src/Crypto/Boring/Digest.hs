@@ -63,7 +63,7 @@ data SHA512
 instance HashAlgorithm SHA512 where
   hashAlgorithmMD = Tagged [C.exp| const EVP_MD* { EVP_sha512() } |]
 
-newtype Digest algo = Digest BS.ByteString
+newtype Digest algo = Digest { unDigest :: BS.ByteString }
   deriving (Eq, Ord, Show)
 
 foreign import ccall "&EVP_MD_CTX_free" _EVP_MD_CTX_free :: FunPtr (Ptr EVP_MD_CTX -> IO ())
@@ -83,10 +83,10 @@ hash = unsafeGeneralizeIO $ do
     fmap Digest $ BS.create (fromIntegral digestSize) $ \hashPtr -> do
       checkRes "EVP_DigestFinal_ex" [C.exp| int { EVP_DigestFinal_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(uint8_t* hashPtr), NULL) } |]
 
-newtype HmacKey = HmacKey BS.ByteString
+newtype HmacKey = HmacKey { unHmacKey :: BS.ByteString }
   deriving (Eq, Ord, Show)
 
-newtype Hmac algo = Hmac BS.ByteString
+newtype Hmac algo = Hmac { unHmac :: BS.ByteString }
   deriving (Eq, Ord, Show)
 
 foreign import ccall "&HMAC_CTX_free" _HMAC_CTX_free :: FunPtr (Ptr HMAC_CTX -> IO ())

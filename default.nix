@@ -32,12 +32,12 @@ let
 
   boringssl-crypto = nixpkgs.callPackage mk-boringssl-crypto {};
 
-  f = { mkDerivation, base, conduit, inline-c, bytestring, mtl, containers, resourcet, tagged, safe-exceptions, tasty, QuickCheck, tasty-quickcheck, stdenv, boringssl }:
+  f = { mkDerivation, base, conduit, inline-c, bytestring, mtl, containers, resourcet, tagged, safe-exceptions, tasty, QuickCheck, tasty-quickcheck, megaparsec, path, tasty-hunit, stdenv, boringssl }:
       mkDerivation {
         pname = "boring-crypto";
         version = "0.1.0.0";
         src = ./.;
-        libraryHaskellDepends = [ base conduit inline-c bytestring mtl containers resourcet tagged safe-exceptions tasty QuickCheck tasty-quickcheck ];
+        libraryHaskellDepends = [ base conduit inline-c bytestring mtl containers resourcet tagged safe-exceptions tasty QuickCheck tasty-quickcheck megaparsec path tasty-hunit ];
         librarySystemDepends = [ boringssl-crypto ];
         license = stdenv.lib.licenses.mit;
 
