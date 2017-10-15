@@ -30,4 +30,6 @@ Haskell cryptographic primitive library based on [BoringSSL](https://boringssl.g
   * SHA384
   * SHA512
 
+* HMAC with the above hashes
+
 * Random number generation
