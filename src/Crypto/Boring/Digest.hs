@@ -1,7 +1,11 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Crypto.Boring.Digest
-  ( Digest(..)
+  ( hash
+  , Digest(..)
+  , HmacKey(..)
+  , Hmac(..)
+  , hmac
   , HashAlgorithm()
   , MD4
   , MD5
@@ -10,10 +14,6 @@ module Crypto.Boring.Digest
   , SHA256
   , SHA384
   , SHA512
-  , hash
-  , HmacKey(..)
-  , Hmac(..)
-  , hmac
   ) where
 
 import qualified Data.ByteString as BS
@@ -68,6 +68,7 @@ newtype Digest algo = Digest BS.ByteString
 
 foreign import ccall "&EVP_MD_CTX_free" _EVP_MD_CTX_free :: FunPtr (Ptr EVP_MD_CTX -> IO ())
 
+-- | Compute a hash of input data using a given algorithm.
 hash :: forall algo m. (HashAlgorithm algo, Monad m) => Sink BS.ByteString m (Digest algo)
 hash = unsafeGeneralizeIO $ do
   ctx <- liftIO $ mask_ $ do
@@ -90,6 +91,7 @@ newtype Hmac algo = Hmac BS.ByteString
 
 foreign import ccall "&HMAC_CTX_free" _HMAC_CTX_free :: FunPtr (Ptr HMAC_CTX -> IO ())
 
+-- | Compute an HMAC of input data using a given underlying algorithm.
 hmac :: forall algo m. (HashAlgorithm algo, Monad m) => HmacKey -> Sink BS.ByteString m (Hmac algo)
 hmac (HmacKey key) = unsafeGeneralizeIO $ do
   ctx <- liftIO $ mask_ $ do

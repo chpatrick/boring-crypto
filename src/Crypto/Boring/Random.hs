@@ -14,6 +14,7 @@ import Crypto.Boring.Exception
 
 C.include "<openssl/rand.h>"
 
+-- | Generate @n@ bytes of cryptographically random data.
 randomBytes :: MonadIO m => Int -> m BS.ByteString
 randomBytes len = liftIO $ do
   let c'len = fromIntegral len

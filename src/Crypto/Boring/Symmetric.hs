@@ -1,7 +1,9 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Crypto.Boring.Symmetric
-  ( Cipher(..)
+  ( encrypt
+  , decrypt
+  , Cipher(..)
   , IsCipher(..)
   , reifyCipher
   , cipherBlockSize
@@ -11,10 +13,6 @@ module Crypto.Boring.Symmetric
   , CipherConfig(..)
   , IV(..)
   , Key(..)
-  , Plaintext(..)
-  , Cryptext(..)
-  , encrypt
-  , decrypt
   ) where
 
 import Foreign
@@ -33,10 +31,6 @@ C.context cryptoCtx
 
 C.include "<openssl/evp.h>"
 
-newtype Plaintext = Plaintext BS.ByteString
-  deriving (Eq, Ord, Show)
-newtype Cryptext = Cryptext BS.ByteString
-  deriving (Eq, Ord, Show)
 newtype IV (cipher :: Cipher) = IV BS.ByteString
   deriving (Eq, Ord, Show)
 newtype Key (cipher :: Cipher) = Key BS.ByteString
@@ -67,18 +61,22 @@ reifyCipher c f = case c of
   AES128 -> f (Proxy @'AES128)
   AES256 -> f (Proxy @'AES256)
 
+-- | The block size of a given `Cipher` in bytes.
 cipherBlockSize :: Cipher -> Int
 cipherBlockSize cipher = unsafePerformIO $ do
   c'cipher <- getCipher cipher CBC
   fromIntegral <$> [C.exp| int { EVP_CIPHER_block_size($(EVP_CIPHER* c'cipher)) } |]
 {-# NOINLINE cipherBlockSize #-}
 
+-- | The key size of a given `Cipher` in bytes.
 cipherKeyLength :: Cipher -> Int
 cipherKeyLength cipher = unsafePerformIO $ do
   c'cipher <- getCipher cipher CBC
   fromIntegral <$> [C.exp| int { EVP_CIPHER_key_length($(EVP_CIPHER* c'cipher)) } |]
 {-# NOINLINE cipherKeyLength #-}
 
+-- | Whether to enable padding. If disabled, encryption and decryption operations
+-- must be given a multiple of `cipherBlockSize` bytes of data.
 data PaddingMode
   = EnablePadding
   | DisablePadding
@@ -147,6 +145,7 @@ crypt initCtx update final conf = unsafeGeneralizeIO $ do
   yieldBlock blockSize $ \outPtr outLenPtr ->
     final ctx outPtr outLenPtr
 
+-- | Encrypt data using a given cipher.
 encrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
 encrypt =
   crypt
@@ -176,6 +175,7 @@ encrypt =
           $(int* outLenPtr)
         ) } |])
 
+-- | Decrypt data using a given cipher.
 decrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
 decrypt =
   crypt
