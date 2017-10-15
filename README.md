@@ -11,6 +11,7 @@ Haskell cryptographic primitive library based on [BoringSSL](https://boringssl.g
 
 ## Implemented features
 * Symmetric encryption
+
   Ciphers:
   * AES128
   * AES256
