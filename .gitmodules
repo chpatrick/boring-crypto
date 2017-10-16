@@ -1,3 +1,6 @@
 [submodule "third_party/python-cryptography"]
 	path = third_party/python-cryptography
 	url = https://github.com/pyca/cryptography.git
+[submodule "third_party/boringssl"]
+	path = third_party/boringssl
+	url = https://boringssl.googlesource.com/boringssl
