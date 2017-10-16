@@ -71,17 +71,25 @@ foreign import ccall "&EVP_MD_CTX_free" _EVP_MD_CTX_free :: FunPtr (Ptr EVP_MD_C
 -- | Compute a hash of input data using a given algorithm.
 hash :: forall algo m. (HashAlgorithm algo, Monad m) => Sink BS.ByteString m (Digest algo)
 hash = unsafeGeneralizeIO $ do
-  ctx <- liftIO $ mask_ $ do
-    ctxPtr <- [C.exp| EVP_MD_CTX* { EVP_MD_CTX_new() } |]
-    newForeignPtr _EVP_MD_CTX_free ctxPtr
-  algoMD <- liftIO $ untag (hashAlgorithmMD @algo)
-  () <- liftIO $ checkRes "EVP_DigestInit_ex" [C.exp| int { EVP_DigestInit_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(EVP_MD* algoMD), NULL) } |]
-  awaitForever $ \block -> do
-    liftIO $ checkRes "EVP_DigestUpdate" [C.exp| int { EVP_DigestUpdate($fptr-ptr:(EVP_MD_CTX* ctx), $bs-ptr:block, $bs-len:block) } |]
+  let update ctx block = checkRes "EVP_DigestUpdate" [C.exp| int { EVP_DigestUpdate($fptr-ptr:(EVP_MD_CTX* ctx), $bs-ptr:block, $bs-len:block) } |]
+
+  -- we have to be careful not to create the ctx as the first operation here,
+  -- because then GHC can helpfully let-float it out and all invocations will share the ctx 
+  mbFirst <- await
+  ( ctx, algoMD ) <- liftIO $ do
+    ctx <- mask_ $ do
+      ctxPtr <- [C.exp| EVP_MD_CTX* { EVP_MD_CTX_new() } |]
+      newForeignPtr _EVP_MD_CTX_free ctxPtr
+    algoMD <- untag (hashAlgorithmMD @algo)
+    checkRes "EVP_DigestInit_ex" [C.exp| int { EVP_DigestInit_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(EVP_MD* algoMD), NULL) } |]
+    traverse_ (update ctx) mbFirst
+    return ( ctx, algoMD )
+  awaitForever (liftIO . update ctx)
   liftIO $ do
     digestSize <- [C.exp| int { EVP_MD_size($(EVP_MD* algoMD)) } |] 
     fmap Digest $ BS.create (fromIntegral digestSize) $ \hashPtr -> do
       checkRes "EVP_DigestFinal_ex" [C.exp| int { EVP_DigestFinal_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(uint8_t* hashPtr), NULL) } |]
+{-# NOINLINE hash #-}
 
 newtype HmacKey = HmacKey { unHmacKey :: BS.ByteString }
   deriving (Eq, Ord, Show)
@@ -123,3 +131,4 @@ hmac (HmacKey key) = unsafeGeneralizeIO $ do
               $(unsigned int* outLenPtr)
             ) } |]
       return (fromIntegral outLen)
+{-# NOINLINE hmac #-}
