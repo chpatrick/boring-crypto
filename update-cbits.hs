@@ -11,14 +11,14 @@ import Data.List
 import Data.Foldable
 import Path
 import Path.IO
-import System.Directory (createDirectoryLink)
 import System.Process
+import System.Posix.Files (createSymbolicLink)
 import Text.Megaparsec
-import Text.Megaparsec.ByteString
 import Text.Megaparsec.Char
-import qualified Text.Megaparsec.Lexer as L
+import qualified Text.Megaparsec.Char.Lexer as L
+import Data.Void
 
-parseBazel :: Parser [ ( String, [ Path Rel File ] ) ] 
+parseBazel :: Parsec Void String [ ( String, [ Path Rel File ] ) ]
 parseBazel = do
   let skipSpace =
         L.space
@@ -61,12 +61,12 @@ main = do
   withSystemTempDir "boring-ssl-unpack" $ \tmpDir -> do
     boringSslDir <- resolveDir' "third_party/boringssl"
     let srcDirLink = tmpDir </> $(mkRelFile "src")
-    createDirectoryLink (toFilePath boringSslDir) (toFilePath srcDirLink)
+    createSymbolicLink (toFilePath boringSslDir) (toFilePath srcDirLink)
     _ <- readCreateProcess (proc "python2" [ "src/util/generate_build_files.py", "bazel" ])
       { cwd = Just (toFilePath tmpDir)
       } ""
     let bazelFile = toFilePath (tmpDir </> $(mkRelFile "BUILD.generated.bzl"))
-    bazelStr <- BS.readFile bazelFile
+    bazelStr <- readFile bazelFile
     fileLists <- case parse parseBazel bazelFile bazelStr of
       Left err -> throwIO err
       Right lists -> return lists

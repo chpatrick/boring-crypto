@@ -436,8 +436,7 @@ executable update-cbits
   build-depends:       base,
                        path,
                        path-io,
-                       directory > 1.3.1.0,
+                       unix,
                        process,
                        megaparsec,
                        bytestring
-  buildable:           False

@@ -13,10 +13,11 @@ module Crypto.Boring.Test.TestVectors
 import Control.Applicative
 import Control.Exception (throwIO)
 import Control.Monad
+import Data.Void
 import Numeric
 import Text.Megaparsec
-import Text.Megaparsec.ByteString
-import qualified Text.Megaparsec.Lexer as MPL
+import Text.Megaparsec.Char
+import qualified Text.Megaparsec.Char.Lexer as L
 import qualified Data.ByteString as BS
 import Path
 
@@ -36,6 +37,8 @@ data MacVector = MacVector
   , mvDigest :: BS.ByteString
   }
 
+type Parser = Parsec Void String
+
 hexString :: Parser BS.ByteString
 hexString = fmap BS.pack $ some $ do
   nibbles <- replicateM 2 hexDigitChar
@@ -44,13 +47,13 @@ hexString = fmap BS.pack $ some $ do
     _ -> fail "hexadecimal byte"
 
 skipSpace :: Parser ()
-skipSpace = MPL.space
+skipSpace = L.space
   (void spaceChar)
-  (MPL.skipLineComment "#")
+  (L.skipLineComment "#")
   empty
 
 lexeme :: Parser a -> Parser a
-lexeme = MPL.lexeme skipSpace
+lexeme = L.lexeme skipSpace
 
 param :: String -> Parser a -> Parser a
 param name value = do
@@ -65,20 +68,20 @@ hashVectors = do
   mbMdLen <- optional $ do
     void $ lexeme $ string "[L"
     void $ lexeme $ char '='
-    mdLen <- lexeme MPL.integer
+    mdLen <- lexeme L.decimal
     void $ lexeme $ char ']'
     skipSpace
-    return (fromIntegral mdLen)
+    return mdLen
 
   let vector = do
-        len <- param "Len" MPL.integer
+        len <- param "Len" L.decimal
         msg <- param "Msg" hexString
         md <- param "MD" hexString
         realMsg <-
           if
             | maybe False (/= BS.length md) mbMdLen -> fail "invalid Md length" 
             | len == 0 && msg == BS.singleton 0 -> return BS.empty
-            | BS.length msg * 8 /= fromIntegral len -> fail "invalid Msg length"
+            | BS.length msg * 8 /= len -> fail "invalid Msg length"
             | otherwise -> return msg 
         return HashVector
           { hvInput = realMsg
@@ -96,13 +99,13 @@ monteCarloVectors = do
   mbMdLen <- optional $ do
     void $ lexeme $ string "[L"
     void $ lexeme $ char '='
-    mdLen <- lexeme MPL.integer
+    mdLen <- lexeme L.decimal
     void $ lexeme $ char ']'
     skipSpace
-    return (fromIntegral mdLen)
+    return mdLen
 
   let vectors curCount = do
-        vecCount <- param "COUNT" MPL.integer
+        vecCount <- param "COUNT" L.decimal
         unless (vecCount == curCount) $ fail "Invalid COUNT"
         md <- param "MD" hexString
         when (maybe False (/= BS.length md) mbMdLen) $
@@ -112,7 +115,7 @@ monteCarloVectors = do
         return (md : mds)
 
   seed <- param "Seed" hexString
-  vecs <- vectors 0 
+  vecs <- vectors (0 :: Int)
   eof
   return $ MonteCarloVectors
     { mcvSeed = seed
@@ -126,13 +129,13 @@ macVectors = do
   mbMdLen <- optional $ do
     void $ lexeme $ string "[L"
     void $ lexeme $ char '='
-    mdLen <- lexeme MPL.integer
+    mdLen <- lexeme L.decimal
     void $ lexeme $ char ']'
     skipSpace
-    return (fromIntegral mdLen)
+    return mdLen
 
   let vector = do
-        len <- param "Len" MPL.integer
+        len <- param "Len" L.decimal
         key <- param "Key" hexString
         msg <- param "Msg" hexString
         md <- param "MD" hexString
@@ -140,7 +143,7 @@ macVectors = do
           if
             | maybe False (/= BS.length md) mbMdLen -> fail "invalid Md length"
             | len == 0 && msg == BS.singleton 0 -> return BS.empty
-            | BS.length msg * 8 /= fromIntegral len -> fail "invalid Msg length"
+            | BS.length msg * 8 /= len -> fail "invalid Msg length"
             | otherwise -> return msg
         return MacVector
           { mvKey = key
@@ -155,7 +158,7 @@ macVectors = do
 getTestVectors :: Parser a -> Path Rel File -> IO a
 getTestVectors parser path = do
   let basePath = $(mkRelDir "third_party/python-cryptography/vectors/cryptography_vectors")
-  vecString <- BS.readFile $ toFilePath (basePath </> path)
+  vecString <- readFile $ toFilePath (basePath </> path)
   case runParser parser (toFilePath path) vecString of
     Left err -> throwIO err
     Right vectors -> return vectors
