@@ -2,15 +2,20 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- This tool builds and tests BoringSSL in third_party/boringssl, and if
+-- they pass, copies the source files to cbits and generates the cabal fo rit.
+
+-- It requires CMake, Go, Perl and Ninja to run.
+
 import Control.Applicative
 import Control.Exception
 import Control.Monad
-import qualified Data.ByteString as BS
 import Data.Char
 import Data.List
 import Data.Foldable
 import Path
 import Path.IO
+import System.Exit
 import System.Process
 import System.Posix.Files (createSymbolicLink)
 import Text.Megaparsec
@@ -27,7 +32,7 @@ parseBazel = do
           empty
 
   let lexeme = L.lexeme skipSpace
-  let symbol = L.symbol skipSpace
+  let symbol sym = void $ L.symbol skipSpace sym
 
   skipSpace
 
@@ -38,7 +43,7 @@ parseBazel = do
           path <- lexeme (char '"' *> manyTill L.charLiteral (char '"'))
           case parseRelFile path of
             Nothing -> fail "Expected relative file path."
-            Just path -> return path
+            Just relPath -> return relPath
     files <-
       between (symbol "[") (symbol "]")
         $ sepEndBy
@@ -50,6 +55,16 @@ parseBazel = do
 
   return fileLists
 
+exec :: String -> [ String ] -> Path Abs Dir -> IO ()
+exec cmd args procCwd = do
+  let cp = (proc cmd args)
+        { cwd = Just (toFilePath procCwd)
+        }
+  withCreateProcess cp $ \_ _ _ hnd -> do
+    exit <- waitForProcess hnd
+    case exit of
+      ExitSuccess -> return ()
+      ExitFailure code -> fail (intercalate " " (cmd : args) ++ " failed with code " ++ show code)
 
 main :: IO ()
 main = do
@@ -58,13 +73,18 @@ main = do
   removeDirRecur cbitsDir
   createDir cbitsDir
 
+  boringSslDir <- resolveDir' "third_party/boringssl"
+
+  putStrLn "Running tests..."
+  withSystemTempDir "boring-ssl-build" $ \buildDir -> do
+    exec "cmake" [ "-GNinja", toFilePath boringSslDir ] buildDir
+    exec "ninja" [ "run_tests" ] buildDir
+
+  putStrLn "Copying source files..."
   withSystemTempDir "boring-ssl-unpack" $ \tmpDir -> do
-    boringSslDir <- resolveDir' "third_party/boringssl"
     let srcDirLink = tmpDir </> $(mkRelFile "src")
     createSymbolicLink (toFilePath boringSslDir) (toFilePath srcDirLink)
-    _ <- readCreateProcess (proc "python2" [ "src/util/generate_build_files.py", "bazel" ])
-      { cwd = Just (toFilePath tmpDir)
-      } ""
+    exec "python2" [ "src/util/generate_build_files.py", "bazel" ] tmpDir
     let bazelFile = toFilePath (tmpDir </> $(mkRelFile "BUILD.generated.bzl"))
     bazelStr <- readFile bazelFile
     fileLists <- case parse parseBazel bazelFile bazelStr of

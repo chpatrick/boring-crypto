@@ -441,4 +441,5 @@ executable update-cbits
                        process,
                        megaparsec,
                        bytestring
+  ghc-options:         -Wall
   buildable: False
