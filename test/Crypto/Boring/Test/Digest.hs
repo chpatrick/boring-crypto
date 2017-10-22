@@ -58,17 +58,17 @@ mkShaTests category name _ = fmap (testGroup name) $ sequence
   , testFile "Monte" >>= mkMonteTest "Monte Carlo" (Proxy @algo)
   ]
     where
-      testFile suff = parseRelFile ("hashes/" ++ category ++ "/" ++ name ++ suff ++ ".rsp") 
+      testFile suff = parseRelFile ("hashes/" ++ category ++ "/" ++ name ++ suff ++ ".rsp")
 
 mkDigestTests :: IO TestTree
 mkDigestTests =
   testGroup "Digest" <$> sequence
     [ testGroup "Hashes" <$> sequence
       [ mkTests "MD5" (Proxy @MD5) $(mkRelFile "hashes/MD5/rfc-1321.txt")
-      , mkShaTests "SHA1" "SHA1" (Proxy @SHA1) 
-      , mkShaTests "SHA2" "SHA256" (Proxy @SHA256) 
-      , mkShaTests "SHA2" "SHA384" (Proxy @SHA384) 
-      , mkShaTests "SHA2" "SHA512" (Proxy @SHA512) 
+      , mkShaTests "SHA1" "SHA1" (Proxy @SHA1)
+      , mkShaTests "SHA2" "SHA256" (Proxy @SHA256)
+      , mkShaTests "SHA2" "SHA384" (Proxy @SHA384)
+      , mkShaTests "SHA2" "SHA512" (Proxy @SHA512)
       ]
     , testGroup "HMAC" <$> sequence
       [ mkHmacTests "HMAC-MD5" (Proxy @MD5) $(mkRelFile "HMAC/rfc-2202-md5.txt")

@@ -1,5 +1,4 @@
 import Test.Tasty
-import Test.Tasty.Ingredients.Basic
 
 import Crypto.Boring.Test.Symmetric
 import Crypto.Boring.Test.Random
@@ -12,4 +11,4 @@ main = do
     , mkDigestTests
     , pure randomTests
     ]
-  defaultMainWithIngredients [ consoleTestReporter ] tests
+  defaultMain tests
