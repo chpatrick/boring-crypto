@@ -8,7 +8,7 @@ import Crypto.Boring.Test.Digest
 main :: IO ()
 main = do
   tests <- testGroup "Crypto.Boring" <$> sequence
-    [ pure symmetricTests
+    [ mkSymmetricTests
     , mkDigestTests
     , pure randomTests
     ]

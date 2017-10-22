@@ -8,6 +8,12 @@ module Crypto.Boring.Test.TestVectors
   , monteCarloVectors
   , MacVector(..)
   , macVectors
+  , CipherDirection(..)
+  , CipherVector(..)
+  , cipherVectors
+
+  , toHex
+  , vectorString
   ) where
 
 import Control.Applicative
@@ -37,6 +43,16 @@ data MacVector = MacVector
   , mvDigest :: BS.ByteString
   }
 
+data CipherDirection = CDEncrypt | CDDecrypt
+
+data CipherVector = CipherVector
+  { cvKey :: BS.ByteString
+  , cvIv :: Maybe BS.ByteString
+  , cvInput :: BS.ByteString
+  , cvOutput :: BS.ByteString
+  , cvDirection :: CipherDirection
+  }
+
 type Parser = Parsec Void String
 
 hexString :: Parser BS.ByteString
@@ -64,7 +80,7 @@ param name value = do
 hashVectors :: Parser [ HashVector ]
 hashVectors = do
   skipSpace
-  
+
   mbMdLen <- optional $ do
     void $ lexeme $ string "[L"
     void $ lexeme $ char '='
@@ -79,10 +95,10 @@ hashVectors = do
         md <- param "MD" hexString
         realMsg <-
           if
-            | maybe False (/= BS.length md) mbMdLen -> fail "invalid Md length" 
+            | maybe False (/= BS.length md) mbMdLen -> fail "invalid Md length"
             | len == 0 && msg == BS.singleton 0 -> return BS.empty
             | BS.length msg * 8 /= len -> fail "invalid Msg length"
-            | otherwise -> return msg 
+            | otherwise -> return msg
         return HashVector
           { hvInput = realMsg
           , hvDigest = md
@@ -95,7 +111,7 @@ hashVectors = do
 monteCarloVectors :: Parser MonteCarloVectors
 monteCarloVectors = do
   skipSpace
-  
+
   mbMdLen <- optional $ do
     void $ lexeme $ string "[L"
     void $ lexeme $ char '='
@@ -109,7 +125,7 @@ monteCarloVectors = do
         unless (vecCount == curCount) $ fail "Invalid COUNT"
         md <- param "MD" hexString
         when (maybe False (/= BS.length md) mbMdLen) $
-          fail "invalid Md length" 
+          fail "invalid Md length"
 
         mds <- option [] $ vectors (curCount + 1)
         return (md : mds)
@@ -155,6 +171,50 @@ macVectors = do
   eof
   return vecs
 
+cipherVectors :: Parser [ CipherVector ]
+cipherVectors = do
+  skipSpace
+
+  let parseDirection =
+        (CDEncrypt <$ lexeme (string "[ENCRYPT]")) <|>
+        (CDDecrypt <$ lexeme (string "[DECRYPT]"))
+
+  let vectors currentDirection curCount = do
+        ( newDir, newCount ) <- option ( currentDirection, curCount ) $ try $ do
+          dir <- parseDirection
+          return ( dir, 0 )
+
+        vecCount <- param "COUNT" L.decimal
+        unless (vecCount == newCount) $ fail "Invalid COUNT"
+        key <- param "KEY" hexString
+        iv <- optional $ param "IV" hexString
+        ( input, output ) <- case newDir of
+          CDEncrypt -> do
+            plainText <- param "PLAINTEXT" hexString
+            cipherText <- param "CIPHERTEXT" hexString
+            return ( plainText, cipherText )
+          CDDecrypt -> do
+            cipherText <- param "CIPHERTEXT" hexString
+            plainText <- param "PLAINTEXT" hexString
+            return ( cipherText, plainText )
+
+        let vec = CipherVector
+              { cvKey = key
+              , cvIv = iv
+              , cvInput = input
+              , cvOutput = output
+              , cvDirection = newDir
+              }
+
+        otherVecs <- option [] $ vectors newDir (newCount + 1)
+        return (vec : otherVecs)
+
+  initialDir <- parseDirection
+
+  vecs <- vectors initialDir (0 :: Int)
+  eof
+  return vecs
+
 getTestVectors :: Parser a -> Path Rel File -> IO a
 getTestVectors parser path = do
   let basePath = $(mkRelDir "third_party/python-cryptography/vectors/cryptography_vectors")
@@ -162,3 +222,16 @@ getTestVectors parser path = do
   case runParser parser (toFilePath path) vecString of
     Left err -> throwIO err
     Right vectors -> return vectors
+
+toHex :: BS.ByteString -> String
+toHex bs = flip concatMap (BS.unpack bs) $ \d -> case showHex d "" of
+      [ l ] -> [ '0', l ]
+      hl -> hl
+
+vectorString :: BS.ByteString -> BS.ByteString -> String
+vectorString input output = trimmedInput ++ " -> " ++ toHex output
+  where
+    inputHex = toHex input
+    trimmedInput
+      | length inputHex > 50 = take 50 inputHex ++ "..."
+      | otherwise = inputHex

@@ -114,19 +114,20 @@ crypt
   -> CipherConfig cipher
   -> Conduit BS.ByteString m BS.ByteString
 crypt initCtx update final conf = unsafeGeneralizeIO $ do
-  ctx <- liftIO $ mask_ $ do
-    ctxPtr <- [C.exp| EVP_CIPHER_CTX* { EVP_CIPHER_CTX_new() } |]
-    when (ctxPtr == nullPtr) $
-      throwM $ CryptoException "EVP_CIPHER_CTX_new failed"
-    newForeignPtr _EVP_CIPHER_CTX_free ctxPtr
-  cipher <- liftIO $ getCipher (ccCipher conf) (ccCipherMode conf)
-  () <- liftIO $ do
+  ctx <- liftIO $ do
+    ctx <- mask_ $ do
+      ctxPtr <- [C.exp| EVP_CIPHER_CTX* { EVP_CIPHER_CTX_new() } |]
+      when (ctxPtr == nullPtr) $
+        throwM $ CryptoException "EVP_CIPHER_CTX_new failed"
+      newForeignPtr _EVP_CIPHER_CTX_free ctxPtr
+    cipher <- getCipher (ccCipher conf) (ccCipherMode conf)
     -- TODO: check key length
     initCtx ctx cipher (ccKey conf) (ccIV conf)
     let padding = case ccPaddingMode conf of
           DisablePadding -> 0
           EnablePadding -> 1
     checkRes "EVP_CIPHER_CTX_set_padding" [C.exp| int { EVP_CIPHER_CTX_set_padding($fptr-ptr:(EVP_CIPHER_CTX* ctx), $(int padding)) } |]
+    return ctx
 
   let blockSize = cipherBlockSize (ccCipher conf)
 

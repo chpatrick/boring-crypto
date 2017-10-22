@@ -5,29 +5,14 @@ module Crypto.Boring.Test.Digest
 import Control.Monad
 import Data.Proxy
 import Path
-import Numeric
 import Test.Tasty
 import Test.Tasty.HUnit
-import qualified Data.ByteString as BS
 import Data.Conduit
 import qualified Data.Conduit.List as CL
 
 import Crypto.Boring.Digest
 
 import Crypto.Boring.Test.TestVectors
-
-toHex :: BS.ByteString -> String
-toHex bs = flip concatMap (BS.unpack bs) $ \d -> case showHex d "" of
-      [ l ] -> [ '0', l ]
-      hl -> hl
-
-vectorString :: BS.ByteString -> BS.ByteString -> String
-vectorString input output = trimmedInput ++ " -> " ++ toHex output
-  where
-    inputHex = toHex input
-    trimmedInput
-      | length inputHex > 50 = take 50 inputHex ++ "..."
-      | otherwise = inputHex
 
 mkTests :: forall algo. HashAlgorithm algo => String -> Proxy algo -> Path Rel File -> IO TestTree
 mkTests name _ vecPath = do

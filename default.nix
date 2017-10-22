@@ -17,6 +17,7 @@ let
     overrides = self: super: {
       inline-c = super.inline-c_0_6_0_5;
       directory = super.directory_1_3_1_4;
+      megaparsec = super.megaparsec_6_2_0;
     };
   };
 
