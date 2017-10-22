@@ -22,13 +22,13 @@ import Data.Conduit
 import qualified Language.C.Inline as C
 import Foreign
 
-import Crypto.Boring.Exception
 import Crypto.Boring.Internal.Context
 import Crypto.Boring.Internal.Prelude
 import Crypto.Boring.Internal.Util
 
 C.context cryptoCtx
 
+C.include "<openssl/err.h>"
 C.include "<openssl/evp.h>"
 C.include "<openssl/hmac.h>"
 
@@ -71,24 +71,40 @@ foreign import ccall "&EVP_MD_CTX_free" _EVP_MD_CTX_free :: FunPtr (Ptr EVP_MD_C
 -- | Compute a hash of input data using a given algorithm.
 hash :: forall algo m. (HashAlgorithm algo, Monad m) => Sink BS.ByteString m (Digest algo)
 hash = unsafeGeneralizeIO $ do
-  let update ctx block = checkRes "EVP_DigestUpdate" [C.exp| int { EVP_DigestUpdate($fptr-ptr:(EVP_MD_CTX* ctx), $bs-ptr:block, $bs-len:block) } |]
+  let update ctx block =
+        [checkExp|
+          EVP_DigestUpdate(
+            $fptr-ptr:(EVP_MD_CTX* ctx),
+            $bs-ptr:block,
+            $bs-len:block
+          ) |]
 
   -- we have to be careful not to create the ctx as the first operation here,
-  -- because then GHC can helpfully let-float it out and all invocations will share the ctx 
+  -- because then GHC can helpfully let-float it out and all invocations will share the ctx
   mbFirst <- await
   ( ctx, algoMD ) <- liftIO $ do
     ctx <- mask_ $ do
-      ctxPtr <- [C.exp| EVP_MD_CTX* { EVP_MD_CTX_new() } |]
+      ctxPtr <- $(checkPtrExp "EVP_MD_CTX" "EVP_MD_CTX_new()")
       newForeignPtr _EVP_MD_CTX_free ctxPtr
     algoMD <- untag (hashAlgorithmMD @algo)
-    checkRes "EVP_DigestInit_ex" [C.exp| int { EVP_DigestInit_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(EVP_MD* algoMD), NULL) } |]
+    [checkExp|
+      EVP_DigestInit_ex(
+        $fptr-ptr:(EVP_MD_CTX* ctx),
+        $(EVP_MD* algoMD),
+        NULL // pick default implementation
+      ) |]
     traverse_ (update ctx) mbFirst
     return ( ctx, algoMD )
   awaitForever (liftIO . update ctx)
   liftIO $ do
-    digestSize <- [C.exp| int { EVP_MD_size($(EVP_MD* algoMD)) } |] 
+    digestSize <- [C.exp| int { EVP_MD_size($(EVP_MD* algoMD)) } |]
     fmap Digest $ BS.create (fromIntegral digestSize) $ \hashPtr -> do
-      checkRes "EVP_DigestFinal_ex" [C.exp| int { EVP_DigestFinal_ex($fptr-ptr:(EVP_MD_CTX* ctx), $(uint8_t* hashPtr), NULL) } |]
+      [checkExp|
+        EVP_DigestFinal_ex(
+          $fptr-ptr:(EVP_MD_CTX* ctx),
+          $(uint8_t* hashPtr),
+          NULL // we don't need to know the digest size
+        ) |]
 {-# NOINLINE hash #-}
 
 newtype HmacKey = HmacKey { unHmacKey :: BS.ByteString }
@@ -102,33 +118,36 @@ foreign import ccall "&HMAC_CTX_free" _HMAC_CTX_free :: FunPtr (Ptr HMAC_CTX -> 
 -- | Compute an HMAC of input data using a given underlying algorithm.
 hmac :: forall algo m. (HashAlgorithm algo, Monad m) => HmacKey -> Sink BS.ByteString m (Hmac algo)
 hmac (HmacKey key) = unsafeGeneralizeIO $ do
-  ctx <- liftIO $ mask_ $ do
-    ctxPtr <- [C.exp| HMAC_CTX* { HMAC_CTX_new() } |]
-    when (ctxPtr == nullPtr) $
-      throw (CryptoException "HMAC_CTX_new() failed!")
+  ctx <- liftIO $ do
+    ctx <- mask_ $ do
+      ctxPtr <- $(checkPtrExp "HMAC_CTX" "HMAC_CTX_new()")
+      newForeignPtr _HMAC_CTX_free ctxPtr
     algoMD <- untag (hashAlgorithmMD @algo)
-    ctx <- newForeignPtr _HMAC_CTX_free ctxPtr
-    checkRes "HMAC_Init_ex" [C.exp| int {
+    [checkExp|
       HMAC_Init_ex(
-        $(HMAC_CTX* ctxPtr),
+        $fptr-ptr:(HMAC_CTX* ctx),
         $bs-ptr:key,
         $bs-len:key,
         $(EVP_MD* algoMD),
-        NULL
-      ) } |]
+        NULL // use the default implementation
+      ) |]
     return ctx
   awaitForever $ \input ->
-    liftIO $ checkRes "HMAC_Update" [C.exp| int { HMAC_Update($fptr-ptr:(HMAC_CTX* ctx), $bs-ptr:input, $bs-len:input) } |]
+    liftIO [checkExp|
+      HMAC_Update(
+        $fptr-ptr:(HMAC_CTX* ctx),
+        $bs-ptr:input,
+        $bs-len:input
+      ) |]
   liftIO $ do
     maxSize <- [C.exp| size_t { EVP_MAX_MD_SIZE } |]
     fmap Hmac $ BS.createAndTrim (fromIntegral maxSize) $ \resPtr -> do
       outLen <- C.withPtr_ $ \outLenPtr ->
-        checkRes "HMAC_Final"
-          [C.exp| int {
-            HMAC_Final(
-              $fptr-ptr:(HMAC_CTX* ctx),
-              $(uint8_t* resPtr),
-              $(unsigned int* outLenPtr)
-            ) } |]
+        [checkExp|
+          HMAC_Final(
+            $fptr-ptr:(HMAC_CTX* ctx),
+            $(uint8_t* resPtr),
+            $(unsigned int* outLenPtr)
+          ) |]
       return (fromIntegral outLen)
 {-# NOINLINE hmac #-}

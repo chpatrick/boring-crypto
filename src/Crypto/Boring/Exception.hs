@@ -1,10 +1,20 @@
 module Crypto.Boring.Exception
-  ( CryptoException(..)
+  ( BoringSslError(..)
+  , CryptoException(..)
   ) where
 
 import Control.Exception
 
-newtype CryptoException = CryptoException String
+data BoringSslError = BoringSslError
+  { beErrorCode :: Int
+  , beLibrary :: String
+  , beFile :: FilePath
+  , beLineNumber :: Int
+  , beReasonString :: String
+  , beExtraStrings :: String
+  } deriving (Eq, Ord, Show)
+
+newtype CryptoException = CryptoException [ BoringSslError ]
   deriving Show
 
 instance Exception CryptoException

@@ -6,6 +6,7 @@ module Crypto.Boring.Internal.Context
   , EVP_MD_CTX
   , EVP_MD
   , HMAC_CTX
+  , ErrorCallback
   , cryptoCtx
   ) where
 
@@ -13,6 +14,8 @@ import qualified Data.Map as M
 import qualified Language.C.Inline as C
 import qualified Language.C.Inline.Context as C
 import qualified Language.C.Types as C
+
+import Foreign
 
 import Crypto.Boring.Internal.Prelude
 
@@ -23,8 +26,10 @@ data EVP_CIPHER
 
 data HMAC_CTX
 
+type ErrorCallback = Ptr C.CChar -> C.CSize -> Ptr () -> IO C.CInt
+
 cryptoCtx :: C.Context
-cryptoCtx = C.baseCtx <> C.bsCtx <> C.fptrCtx <> mempty
+cryptoCtx = C.baseCtx <> C.bsCtx <> C.fptrCtx <> C.funCtx <> mempty
   { C.ctxTypesTable = M.fromList
       [ ( C.TypeName "EVP_MD_CTX", [t|EVP_MD_CTX|] )
       , ( C.TypeName "EVP_MD", [t|EVP_MD|] )

@@ -24,11 +24,11 @@ allEnum :: (Enum a, Bounded a) => [ a ]
 allEnum = [minBound..maxBound]
 
 instance IsCipher cipher => Arbitrary (Key cipher) where
-  arbitrary = 
+  arbitrary =
     fmap (Key . BS.pack) $ replicateM (cipherKeyLength (untag (reflectCipher @cipher))) arbitrary
 
 instance IsCipher cipher => Arbitrary (IV cipher) where
-  arbitrary = 
+  arbitrary =
     fmap (IV . BS.pack) $ replicateM (cipherBlockSize (untag (reflectCipher @cipher))) arbitrary
 
 roundTrip :: forall cipher. IsCipher cipher => Proxy cipher -> BlockCipherMode -> PaddingMode -> Key cipher -> IV cipher -> Property

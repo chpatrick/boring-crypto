@@ -10,8 +10,9 @@ import qualified Language.C.Inline as C
 import Foreign
 
 import Crypto.Boring.Internal.Prelude
-import Crypto.Boring.Exception
+import Crypto.Boring.Internal.Util
 
+C.include "<openssl/err.h>"
 C.include "<openssl/rand.h>"
 
 -- | Generate @n@ bytes of cryptographically random data.
@@ -19,9 +20,8 @@ randomBytes :: MonadIO m => Int -> m BS.ByteString
 randomBytes len = liftIO $ do
   let c'len = fromIntegral len
   BS.create len $ \bufPtr -> do
-    success <- [C.exp| int {
-      RAND_bytes($(uint8_t* bufPtr), $(size_t c'len))
-      } |]
-
-    unless (toBool success) $
-      throwM $ CryptoException "Random number generation failed!"
+    [checkExp|
+      RAND_bytes(
+        $(uint8_t* bufPtr),
+        $(size_t c'len)
+      ) |]

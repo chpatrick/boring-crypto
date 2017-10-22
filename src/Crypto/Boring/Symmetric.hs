@@ -22,13 +22,13 @@ import Data.Conduit
 import qualified Language.C.Inline as C
 import System.IO.Unsafe
 
-import Crypto.Boring.Exception
 import Crypto.Boring.Internal.Context
 import Crypto.Boring.Internal.Prelude
 import Crypto.Boring.Internal.Util
 
 C.context cryptoCtx
 
+C.include "<openssl/err.h>"
 C.include "<openssl/evp.h>"
 
 newtype IV (cipher :: Cipher) = IV BS.ByteString
@@ -116,17 +116,20 @@ crypt
 crypt initCtx update final conf = unsafeGeneralizeIO $ do
   ctx <- liftIO $ do
     ctx <- mask_ $ do
-      ctxPtr <- [C.exp| EVP_CIPHER_CTX* { EVP_CIPHER_CTX_new() } |]
-      when (ctxPtr == nullPtr) $
-        throwM $ CryptoException "EVP_CIPHER_CTX_new failed"
+      ctxPtr <- $(checkPtrExp "EVP_CIPHER_CTX" "EVP_CIPHER_CTX_new()")
       newForeignPtr _EVP_CIPHER_CTX_free ctxPtr
+
     cipher <- getCipher (ccCipher conf) (ccCipherMode conf)
     -- TODO: check key length
     initCtx ctx cipher (ccKey conf) (ccIV conf)
     let padding = case ccPaddingMode conf of
           DisablePadding -> 0
           EnablePadding -> 1
-    checkRes "EVP_CIPHER_CTX_set_padding" [C.exp| int { EVP_CIPHER_CTX_set_padding($fptr-ptr:(EVP_CIPHER_CTX* ctx), $(int padding)) } |]
+    [checkExp|
+      EVP_CIPHER_CTX_set_padding(
+        $fptr-ptr:(EVP_CIPHER_CTX* ctx),
+        $(int padding)
+      ) |]
     return ctx
 
   let blockSize = cipherBlockSize (ccCipher conf)
@@ -134,7 +137,7 @@ crypt initCtx update final conf = unsafeGeneralizeIO $ do
   let yieldBlock maxSize f = do
         outBuf <- liftIO $
           BS.createAndTrim maxSize $ \outPtr -> do
-            outLen <- C.withPtr_ $ \outLenPtr -> 
+            outLen <- C.withPtr_ $ \outLenPtr ->
               f outPtr outLenPtr
             return (fromIntegral outLen)
         unless (BS.null outBuf) $ yield outBuf
@@ -150,58 +153,56 @@ crypt initCtx update final conf = unsafeGeneralizeIO $ do
 encrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
 encrypt =
   crypt
-    (\ctx cipher (Key key) (IV iv) -> 
-      checkRes "EVP_EncryptInit_ex"
-        [C.exp| int {
-          EVP_EncryptInit_ex(
-            $fptr-ptr:(EVP_CIPHER_CTX* ctx),
-            $(EVP_CIPHER* cipher),
-            NULL, // pick default impl
-            $bs-ptr:key, $bs-ptr:iv) 
-        } |])
+    (\ctx cipher (Key key) (IV iv) ->
+      [checkExp|
+        EVP_EncryptInit_ex(
+          $fptr-ptr:(EVP_CIPHER_CTX* ctx),
+          $(EVP_CIPHER* cipher),
+          NULL, // pick default impl
+          $bs-ptr:key, $bs-ptr:iv
+      ) |])
     (\ctx outPtr outLenPtr plain ->
-      checkRes "EVP_EncryptUpdate" [C.exp| int {
+      [checkExp|
         EVP_EncryptUpdate(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr),
           $bs-ptr:plain,
           $bs-len:plain
-        ) } |])
-    (\ctx outPtr outLenPtr -> 
-      checkRes "EVP_EncryptFinal_ex" [C.exp| int {
+        ) |])
+    (\ctx outPtr outLenPtr ->
+      [checkExp|
         EVP_EncryptFinal_ex(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr)
-        ) } |])
+        ) |])
 
 -- | Decrypt data using a given cipher.
 decrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
 decrypt =
   crypt
-    (\ctx cipher (Key key) (IV iv) -> 
-      checkRes "EVP_DecryptInit_ex"
-        [C.exp| int {
-          EVP_DecryptInit_ex(
-            $fptr-ptr:(EVP_CIPHER_CTX* ctx),
-            $(EVP_CIPHER* cipher),
-            NULL, // pick default impl
-            $bs-ptr:key, $bs-ptr:iv) 
-        } |])
+    (\ctx cipher (Key key) (IV iv) ->
+      [checkExp|
+        EVP_DecryptInit_ex(
+          $fptr-ptr:(EVP_CIPHER_CTX* ctx),
+          $(EVP_CIPHER* cipher),
+          NULL, // pick default impl
+          $bs-ptr:key, $bs-ptr:iv
+      ) |])
     (\ctx outPtr outLenPtr plain ->
-      checkRes "EVP_DecryptUpdate" [C.exp| int {
+      [checkExp|
         EVP_DecryptUpdate(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr),
           $bs-ptr:plain,
           $bs-len:plain
-        ) } |])
-    (\ctx outPtr outLenPtr -> 
-      checkRes "EVP_DecryptFinal_ex" [C.exp| int {
+        ) |])
+    (\ctx outPtr outLenPtr ->
+      [checkExp|
         EVP_DecryptFinal_ex(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr)
-        ) } |])
+        ) |])

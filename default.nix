@@ -4,12 +4,12 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, base, conduit, inline-c, bytestring, containers, resourcet, tagged, safe-exceptions, tasty, QuickCheck, tasty-quickcheck, megaparsec, path, path-io, tasty-hunit, stdenv }:
+  f = { mkDerivation, base, conduit, inline-c, bytestring, containers, resourcet, tagged, safe-exceptions, tasty, QuickCheck, tasty-quickcheck, megaparsec, path, path-io, tasty-hunit, template-haskell, stdenv }:
       mkDerivation {
         pname = "boring-crypto";
         version = "0.1.0.0";
         src = ./.;
-        libraryHaskellDepends = [ base conduit inline-c bytestring containers resourcet tagged safe-exceptions tasty QuickCheck tasty-quickcheck megaparsec path path-io tasty-hunit ];
+        libraryHaskellDepends = [ base conduit inline-c bytestring containers resourcet tagged safe-exceptions tasty QuickCheck tasty-quickcheck megaparsec path path-io tasty-hunit template-haskell ];
         license = stdenv.lib.licenses.mit;
       };
 
