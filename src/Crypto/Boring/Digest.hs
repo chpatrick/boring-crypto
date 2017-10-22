@@ -75,7 +75,7 @@ hash = unsafeGeneralizeIO $ do
         [checkExp|
           EVP_DigestUpdate(
             $fptr-ptr:(EVP_MD_CTX* ctx),
-            $bs-ptr:block,
+            (const uint8_t*) $bs-ptr:block,
             $bs-len:block
           ) |]
 
@@ -126,7 +126,7 @@ hmac (HmacKey key) = unsafeGeneralizeIO $ do
     [checkExp|
       HMAC_Init_ex(
         $fptr-ptr:(HMAC_CTX* ctx),
-        $bs-ptr:key,
+        (const uint8_t*) $bs-ptr:key,
         $bs-len:key,
         $(EVP_MD* algoMD),
         NULL // use the default implementation
@@ -136,7 +136,7 @@ hmac (HmacKey key) = unsafeGeneralizeIO $ do
     liftIO [checkExp|
       HMAC_Update(
         $fptr-ptr:(HMAC_CTX* ctx),
-        $bs-ptr:input,
+        (const uint8_t*) $bs-ptr:input,
         $bs-len:input
       ) |]
   liftIO $ do

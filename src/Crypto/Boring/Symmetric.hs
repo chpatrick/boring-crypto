@@ -159,7 +159,8 @@ encrypt =
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(EVP_CIPHER* cipher),
           NULL, // pick default impl
-          $bs-ptr:key, $bs-ptr:iv
+          (const uint8_t*) $bs-ptr:key,
+          (const uint8_t*) $bs-ptr:iv
       ) |])
     (\ctx outPtr outLenPtr plain ->
       [checkExp|
@@ -167,7 +168,7 @@ encrypt =
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr),
-          $bs-ptr:plain,
+          (const uint8_t*) $bs-ptr:plain,
           $bs-len:plain
         ) |])
     (\ctx outPtr outLenPtr ->
@@ -188,7 +189,8 @@ decrypt =
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(EVP_CIPHER* cipher),
           NULL, // pick default impl
-          $bs-ptr:key, $bs-ptr:iv
+          (const uint8_t*) $bs-ptr:key,
+          (const uint8_t*) $bs-ptr:iv
       ) |])
     (\ctx outPtr outLenPtr plain ->
       [checkExp|
@@ -196,7 +198,7 @@ decrypt =
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
           $(uint8_t* outPtr),
           $(int* outLenPtr),
-          $bs-ptr:plain,
+          (const uint8_t*) $bs-ptr:plain,
           $bs-len:plain
         ) |])
     (\ctx outPtr outLenPtr ->
