@@ -7,7 +7,7 @@ Haskell cryptographic primitive library based on [BoringSSL](https://boringssl.g
 * Operations are exposed using [conduit](https://github.com/snoyberg/conduit#readme), allowing for streaming.
 * All cryptographic operations are implemented in BoringSSL, no custom crypto code.
 * Type-safe bindings thanks to [inline-c](https://github.com/fpco/inline-c/blob/master/inline-c/README.md).
-* Tested using [pyca/cryptography](https://github.com/pyca/cryptography)'s [test suite](https://cryptography.io/en/latest/development/test-vectors/).
+* Tested using [pyca/cryptography](https://github.com/pyca/cryptography)'s [test suite](https://cryptography.io/en/latest/development/test-vectors/) (on top of BoringSSL's own tests).
 * BoringSSL is incorporated into the package, no dependencies need to be installed.
 
 ## Implemented features
