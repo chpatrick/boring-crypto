@@ -12,5 +12,6 @@ import Control.Monad.IO.Class as X
 import Data.Tagged as X
 import Control.Exception.Safe as X
 import Data.Proxy as X
+import GHC.Stack as X
 
 import Prelude as X

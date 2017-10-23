@@ -1,4 +1,5 @@
 {-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Crypto.Boring.Symmetric
   ( encrypt
@@ -10,9 +11,13 @@ module Crypto.Boring.Symmetric
   , cipherKeyLength
   , PaddingMode(..)
   , BlockCipherMode(..)
+  , IsMode(reflectMode, IV, mkIV, ivSize)
+  , reifyMode
   , CipherConfig(..)
-  , IV(..)
-  , Key(..)
+  , Key
+  , mkKey
+  , Block
+  , mkBlock
   ) where
 
 import Foreign
@@ -31,9 +36,29 @@ C.context cryptoCtx
 C.include "<openssl/err.h>"
 C.include "<openssl/evp.h>"
 
-newtype IV (cipher :: Cipher) = IV BS.ByteString
-  deriving (Eq, Ord, Show)
 newtype Key (cipher :: Cipher) = Key BS.ByteString
+  deriving (Eq, Ord, Show)
+
+mkKey :: forall cipher. (IsCipher cipher, HasCallStack) => BS.ByteString -> Key cipher
+mkKey bs
+  | actualLength == expectedLength = Key bs
+  | otherwise = error ("Invalid key length, expected " ++ show expectedLength ++ ", got " ++ show actualLength)
+    where
+      expectedLength = cipherKeyLength (untag (reflectCipher @cipher))
+      actualLength = BS.length bs
+
+newtype Block (cipher :: Cipher) = Block BS.ByteString
+  deriving (Eq, Ord, Show)
+
+mkBlock :: forall cipher. (IsCipher cipher, HasCallStack) => BS.ByteString -> Block cipher
+mkBlock bs
+  | actualLength == expectedLength = Block bs
+  | otherwise = error ("Invalid block length, expected " ++ show expectedLength ++ ", got " ++ show actualLength)
+    where
+      expectedLength = cipherBlockSize (untag (reflectCipher @cipher))
+      actualLength = BS.length bs
+
+data NoIV = NoIV
   deriving (Eq, Ord, Show)
 
 data BlockCipherMode
@@ -41,6 +66,40 @@ data BlockCipherMode
   | ECB
   | OFB
     deriving (Eq, Ord, Show, Enum, Bounded)
+
+class IsMode (mode :: BlockCipherMode) where
+  type IV (cipher :: Cipher) mode :: *
+  reflectMode :: Tagged mode BlockCipherMode
+  getIV :: Proxy cipher -> Proxy mode -> IV cipher mode -> BS.ByteString
+  mkIV :: (HasCallStack, IsCipher cipher) => Proxy cipher -> Proxy mode -> Maybe BS.ByteString -> IV cipher mode
+  ivSize :: (IsCipher cipher) => Proxy cipher -> Proxy mode -> Maybe Int
+
+instance IsMode 'CBC where
+  type IV cipher 'CBC = Block cipher
+  reflectMode = Tagged CBC
+  getIV _ _ (Block iv) = iv
+  mkIV _ _ = maybe (error "Expected an IV for CBC") mkBlock
+  ivSize (_ :: Proxy cipher) _ = Just $ cipherBlockSize $ untag (reflectCipher @cipher)
+
+instance IsMode 'ECB where
+  type IV cipher 'ECB = NoIV
+  reflectMode = Tagged ECB
+  getIV _ _ NoIV = BS.empty
+  mkIV _ _ = maybe NoIV (\_ -> error "Expected no IV for ECB")
+  ivSize _ _ = Nothing
+
+instance IsMode 'OFB where
+  type IV cipher 'OFB = Block cipher
+  reflectMode = Tagged OFB
+  getIV _ _ (Block iv) = iv
+  mkIV _ _ = maybe (error "Expected an IV for OFB") mkBlock
+  ivSize (_ :: Proxy cipher) _ = Just $ cipherBlockSize $ untag (reflectCipher @cipher)
+
+reifyMode :: BlockCipherMode -> (forall mode. IsMode mode => Proxy mode -> a) -> a
+reifyMode m f = case m of
+  CBC -> f (Proxy @'CBC)
+  ECB -> f (Proxy @'ECB)
+  OFB -> f (Proxy @'OFB)
 
 data Cipher
   = AES128
@@ -64,14 +123,14 @@ reifyCipher c f = case c of
 -- | The block size of a given `Cipher` in bytes.
 cipherBlockSize :: Cipher -> Int
 cipherBlockSize cipher = unsafePerformIO $ do
-  c'cipher <- getCipher cipher CBC
+  c'cipher <- getCipher cipher ECB
   fromIntegral <$> [C.exp| int { EVP_CIPHER_block_size($(EVP_CIPHER* c'cipher)) } |]
 {-# NOINLINE cipherBlockSize #-}
 
 -- | The key size of a given `Cipher` in bytes.
 cipherKeyLength :: Cipher -> Int
 cipherKeyLength cipher = unsafePerformIO $ do
-  c'cipher <- getCipher cipher CBC
+  c'cipher <- getCipher cipher ECB
   fromIntegral <$> [C.exp| int { EVP_CIPHER_key_length($(EVP_CIPHER* c'cipher)) } |]
 {-# NOINLINE cipherKeyLength #-}
 
@@ -82,15 +141,17 @@ data PaddingMode
   | DisablePadding
     deriving (Eq, Ord, Show, Enum, Bounded)
 
-data CipherConfig cipher = CipherConfig
+data CipherConfig cipher mode = CipherConfig
   { ccPaddingMode :: PaddingMode
-  , ccCipherMode :: BlockCipherMode
   , ccKey :: Key cipher
-  , ccIV :: IV cipher
+  , ccIV :: IV cipher mode
   }
 
-ccCipher :: forall cipher. IsCipher cipher => CipherConfig cipher -> Cipher
+ccCipher :: forall cipher mode. IsCipher cipher => CipherConfig cipher mode -> Cipher
 ccCipher _ = untag (reflectCipher @cipher)
+
+ccCipherMode :: forall cipher mode. IsMode mode => CipherConfig cipher mode -> BlockCipherMode
+ccCipherMode _ = untag (reflectMode @mode)
 
 foreign import ccall "&EVP_CIPHER_CTX_free" _EVP_CIPHER_CTX_free :: FunPtr (Ptr EVP_CIPHER_CTX -> IO ())
 
@@ -107,11 +168,11 @@ getCipher cipher mode = case cipher of
     OFB -> [C.exp| const EVP_CIPHER* { EVP_aes_256_ofb() } |]
 
 crypt
-  :: (Monad m, IsCipher cipher)
-  => (ForeignPtr EVP_CIPHER_CTX -> Ptr EVP_CIPHER -> Key cipher -> IV cipher -> IO ()) -- init context
+  :: forall m cipher mode. (Monad m, IsCipher cipher, IsMode mode)
+  => (ForeignPtr EVP_CIPHER_CTX -> Ptr EVP_CIPHER -> Key cipher -> BS.ByteString -> IO ()) -- init context
   -> (ForeignPtr EVP_CIPHER_CTX -> Ptr Word8 -> Ptr C.CInt -> BS.ByteString -> IO ()) -- update
   -> (ForeignPtr EVP_CIPHER_CTX -> Ptr Word8 -> Ptr C.CInt -> IO ()) -- final
-  -> CipherConfig cipher
+  -> CipherConfig cipher mode
   -> Conduit BS.ByteString m BS.ByteString
 crypt initCtx update final conf = unsafeGeneralizeIO $ do
   ctx <- liftIO $ do
@@ -121,7 +182,7 @@ crypt initCtx update final conf = unsafeGeneralizeIO $ do
 
     cipher <- getCipher (ccCipher conf) (ccCipherMode conf)
     -- TODO: check key length
-    initCtx ctx cipher (ccKey conf) (ccIV conf)
+    initCtx ctx cipher (ccKey conf) (getIV (Proxy @cipher) (Proxy @mode) (ccIV conf))
     let padding = case ccPaddingMode conf of
           DisablePadding -> 0
           EnablePadding -> 1
@@ -148,12 +209,13 @@ crypt initCtx update final conf = unsafeGeneralizeIO $ do
 
   yieldBlock blockSize $ \outPtr outLenPtr ->
     final ctx outPtr outLenPtr
+{-# NOINLINE crypt #-}
 
 -- | Encrypt data using a given cipher.
-encrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
+encrypt :: (Monad m, IsCipher cipher, IsMode mode) => CipherConfig cipher mode -> Conduit BS.ByteString m BS.ByteString
 encrypt =
   crypt
-    (\ctx cipher (Key key) (IV iv) ->
+    (\ctx cipher (Key key) iv ->
       [checkExp|
         EVP_EncryptInit_ex(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
@@ -180,10 +242,10 @@ encrypt =
         ) |])
 
 -- | Decrypt data using a given cipher.
-decrypt :: (Monad m, IsCipher cipher) => CipherConfig cipher -> Conduit BS.ByteString m BS.ByteString
+decrypt :: (Monad m, IsCipher cipher, IsMode mode) => CipherConfig cipher mode -> Conduit BS.ByteString m BS.ByteString
 decrypt =
   crypt
-    (\ctx cipher (Key key) (IV iv) ->
+    (\ctx cipher (Key key) iv ->
       [checkExp|
         EVP_DecryptInit_ex(
           $fptr-ptr:(EVP_CIPHER_CTX* ctx),
